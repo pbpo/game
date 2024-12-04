@@ -33,7 +33,7 @@ winner = None
 min_diff = None
 
 # FFT 평활화 함수
-def fft_smooth(points, keep_fraction=0.1):
+def fft_smooth(points, keep_fraction=0.05):
     x_coords = np.array([p[0] for p in points])
     y_coords = np.array([p[1] for p in points])
     n = len(points)
