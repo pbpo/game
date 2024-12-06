@@ -86,56 +86,71 @@ def display_text(text, pos, color=WHITE):
     rendered_text = font.render(text, True, color)
     screen.blit(rendered_text, pos)
 
-def circle_line_collision(cx, cy, radius, p1, p2):
-    """Detect collision between a circle and a line segment."""
+def check_collision(cx, cy, radius, p1, p2):
+    
+    # 선분의 벡터 계산
     dx = p2[0] - p1[0]
     dy = p2[1] - p1[1]
-
-    if dx == 0 and dy == 0:
-        # p1 and p2 are the same point
-        closest_x = p1[0]
-        closest_y = p1[1]
-    else:
-        # Find the projection of the circle's center onto the line segment
-        t = ((cx - p1[0]) * dx + (cy - p1[1]) * dy) / (dx * dx + dy * dy)
-        t = max(0, min(1, t))  # Clamp t to the [0, 1] range
-        closest_x = p1[0] + t * dx
-        closest_y = p1[1] + t * dy
-
-    # Calculate the distance between the circle's center and the closest point
-    distance = math.hypot(cx - closest_x, cy - closest_y)
-
-    if distance < radius:
-        # Collision detected
-        return True, closest_x, closest_y
+    
+    # 선분의 길이의 제곱
+    l2 = dx * dx + dy * dy
+    
+    if l2 == 0:
+        # p1과 p2가 같은 점인 경우
+        d2 = (cx - p1[0]) * (cx - p1[0]) + (cy - p1[1]) * (cy - p1[1])
+        return d2 <= radius * radius, p1[0], p1[1]
+    
+    # 원의 중심에서 선분에 내린 수선의 발을 구하는 매개변수 t
+    t = max(0, min(1, ((cx - p1[0]) * dx + (cy - p1[1]) * dy) / l2))
+    
+    # 수선의 발 좌표 계산
+    proj_x = p1[0] + t * dx
+    proj_y = p1[1] + t * dy
+    
+    # 크래프톤 공식: 원의 중심에서 수선의 발까지의 거리 계산
+    # |AP x AB| / |AB| = h (수선의 길이)
+    # 여기서 AP는 원의 중심에서 선분의 시작점까지의 벡터
+    # AB는 선분의 벡터
+    cross_product = abs((cx - p1[0]) * dy - (cy - p1[1]) * dx)
+    distance = cross_product / math.sqrt(l2)
+    
+    # 충돌 여부 확인
+    if distance <= radius:
+        # 충돌이 발생한 경우, 충돌점 반환
+        return True, proj_x, proj_y
+    
     return False, None, None
 
-def check_collision(char_x, char_y, platforms, vy):
-    """Check if the character collides with any platform."""
+def check_collision_krafton(char_x, char_y, platforms, vy):
+    """크래프톤 공식을 사용한 캐릭터와 플랫폼 간의 충돌 체크"""
     global character_y, character_vy, on_ground, remaining_jumps
-
+    
     for platform in platforms:
         p1, p2 = platform
-        collided, closest_x, closest_y = circle_line_collision(
+        collided, closest_x, closest_y = check_collision(
             char_x, char_y, character_radius, p1, p2
         )
+        
         if collided:
-            if vy > 0:
-                # Calculate the slope of the platform
-                slope = (p2[1] - p1[1]) / (p2[0] - p1[0]) if (p2[0] - p1[0]) != 0 else float("inf")
-                if slope != float("inf"):
+            if vy > 0:  # 캐릭터가 아래로 이동 중일 때만 처리
+                # 플랫폼의 기울기 계산
+                if p2[0] - p1[0] != 0:  # 수직선이 아닌 경우
+                    slope = (p2[1] - p1[1]) / (p2[0] - p1[0])
+                    # 캐릭터의 x 위치가 플랫폼의 범위 내에 있는지 확인
                     if min(p1[0], p2[0]) <= char_x <= max(p1[0], p2[0]):
-                        # Calculate the y-coordinate of the platform at the character's x-position
-                        if p1[0] != p2[0]:
-                            platform_y = slope * (char_x - p1[0]) + p1[1]
-                        else:
-                            platform_y = p1[1]
-                        if char_y + character_radius >= platform_y:
-                            character_y = platform_y - character_radius
-                            character_vy = 0
-                            on_ground = True
-                            remaining_jumps = stages[current_stage_index]["jumps"]
-                            return
+                        # 플랫폼 위의 정확한 y 좌표 계산
+                        platform_y = slope * (char_x - p1[0]) + p1[1]
+                        # 캐릭터를 플랫폼 위로 위치시킴
+                        character_y = platform_y - character_radius
+                        character_vy = 0
+                        on_ground = True
+                        remaining_jumps = stages[current_stage_index]["jumps"]
+                        return
+                else:  # 수직선인 경우
+                    if min(p1[1], p2[1]) <= char_y <= max(p1[1], p2[1]):
+                        character_x = p1[0] - character_radius
+                        character_vy = 0
+    
     on_ground = False
 
 def reset_stage():
@@ -202,7 +217,7 @@ def move_character():
         on_ground = False
 
     # Check collision with platforms
-    check_collision(character_x, character_y, platforms, character_vy)
+    check_collision_krafton(character_x, character_y, platforms, character_vy)
 
 def jump():
     """Make the character jump and decrement the jump count."""
